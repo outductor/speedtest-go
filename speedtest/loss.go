@@ -16,7 +16,8 @@ type PacketLossAnalyzerOptions struct {
 	SourceInterface        string      // source interface
 	TCPDialer              *net.Dialer // tcp dialer for sampling
 	UDPDialer              *net.Dialer // udp dialer for sending packet
-
+	TCPNetwork             string      // "tcp", "tcp4", or "tcp6"
+	UDPNetwork             string      // "udp", "udp4", or "udp6"
 }
 
 type PacketLossAnalyzer struct {
@@ -108,9 +109,18 @@ func (pla *PacketLossAnalyzer) RunWithContext(ctx context.Context, host string, 
 	if err != nil {
 		return transport.ErrUnsupported
 	}
+	// Set network type for TCP client if specified
+	if pla.options.TCPNetwork != "" {
+		samplerClient.SetNetworkType(pla.options.TCPNetwork)
+	}
+
 	senderClient, err := transport.NewPacketLossSender(samplerClient.ID(), pla.options.UDPDialer)
 	if err != nil {
 		return transport.ErrUnsupported
+	}
+	// Set network type for UDP sender if specified
+	if pla.options.UDPNetwork != "" {
+		senderClient.SetNetworkType(pla.options.UDPNetwork)
 	}
 
 	if err = samplerClient.Connect(ctx, host); err != nil {

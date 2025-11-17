@@ -41,7 +41,8 @@ func (s *Speedtest) FetchUserInfoContext(ctx context.Context) (*User, error) {
 		return nil, err
 	}
 
-	resp, err := s.doer.Do(req)
+	// Use setupClient for initial configuration (dual-stack, no IPv4/IPv6 restrictions)
+	resp, err := s.setupClient.Do(req)
 	if err != nil {
 		return nil, err
 	}

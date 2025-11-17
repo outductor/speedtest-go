@@ -30,10 +30,11 @@ type Speedtest struct {
 	User *User
 	Manager
 
-	doer      *http.Client
-	config    *UserConfig
-	tcpDialer *net.Dialer
-	ipDialer  *net.Dialer
+	doer        *http.Client // HTTP client for speed tests (with IPv4/IPv6 restrictions)
+	setupClient *http.Client // HTTP client for initial setup (dual-stack, no restrictions)
+	config      *UserConfig
+	tcpDialer   *net.Dialer
+	ipDialer    *net.Dialer
 }
 
 type UserConfig struct {
@@ -54,6 +55,14 @@ type UserConfig struct {
 	Location     *Location
 
 	Keyword string // Fuzzy search
+
+	IPv4Only bool
+	IPv6Only bool
+
+	// Internal fields set based on IPv4Only/IPv6Only
+	tcpNetwork  string
+	udpNetwork  string
+	icmpNetwork string
 }
 
 func parseAddr(addr string) (string, string) {
@@ -89,6 +98,22 @@ func (s *Speedtest) NewUserConfig(uc *UserConfig) {
 		}
 	}
 
+	// Determine network types based on IPv4/IPv6 preferences
+	uc.tcpNetwork = "tcp"
+	uc.udpNetwork = "udp"
+	uc.icmpNetwork = "ip:icmp"
+	if uc.IPv4Only {
+		uc.tcpNetwork = "tcp4"
+		uc.udpNetwork = "udp4"
+		uc.icmpNetwork = "ip4:icmp"
+		dbg.Printf("Network: IPv4 only\n")
+	} else if uc.IPv6Only {
+		uc.tcpNetwork = "tcp6"
+		uc.udpNetwork = "udp6"
+		uc.icmpNetwork = "ip6:icmp"
+		dbg.Printf("Network: IPv6 only\n")
+	}
+
 	var tcpSource net.Addr // If nil, a local address is automatically chosen.
 	var icmpSource net.Addr
 	var proxy = http.ProxyFromEnvironment
@@ -98,7 +123,7 @@ func (s *Speedtest) NewUserConfig(uc *UserConfig) {
 	}
 	if len(uc.Source) > 0 {
 		_, address := parseAddr(uc.Source)
-		addr0, err := net.ResolveTCPAddr("tcp", fmt.Sprintf("[%s]:0", address)) // dynamic tcp port
+		addr0, err := net.ResolveTCPAddr(uc.tcpNetwork, fmt.Sprintf("[%s]:0", address)) // dynamic tcp port
 		if err == nil {
 			tcpSource = addr0
 		} else {
@@ -112,6 +137,20 @@ func (s *Speedtest) NewUserConfig(uc *UserConfig) {
 		}
 		if uc.DnsBindSource {
 			net.DefaultResolver.Dial = func(ctx context.Context, network, dnsServer string) (net.Conn, error) {
+				// Override network type based on IPv4/IPv6 preference
+				if uc.IPv4Only {
+					if strings.HasPrefix(network, "udp") {
+						network = "udp4"
+					} else if strings.HasPrefix(network, "tcp") {
+						network = "tcp4"
+					}
+				} else if uc.IPv6Only {
+					if strings.HasPrefix(network, "udp") {
+						network = "udp6"
+					} else if strings.HasPrefix(network, "tcp") {
+						network = "tcp6"
+					}
+				}
 				dialer := &net.Dialer{
 					Timeout: 5 * time.Second,
 					LocalAddr: func(network string) net.Addr {
@@ -154,9 +193,21 @@ func (s *Speedtest) NewUserConfig(uc *UserConfig) {
 		Control:   uc.DialerControl,
 	}
 
+	// Create a custom DialContext that enforces the network type for speed tests
+	dialContext := func(ctx context.Context, network, address string) (net.Conn, error) {
+		// Override the network type based on IPv4/IPv6 preference
+		if uc.IPv4Only && strings.HasPrefix(network, "tcp") {
+			network = "tcp4"
+		} else if uc.IPv6Only && strings.HasPrefix(network, "tcp") {
+			network = "tcp6"
+		}
+		return s.tcpDialer.DialContext(ctx, network, address)
+	}
+
+	// HTTP Transport for speed tests (with IPv4/IPv6 restrictions)
 	s.config.T = &http.Transport{
 		Proxy:                 proxy,
-		DialContext:           s.tcpDialer.DialContext,
+		DialContext:           dialContext,
 		ForceAttemptHTTP2:     true,
 		MaxIdleConns:          100,
 		IdleConnTimeout:       90 * time.Second,
@@ -165,6 +216,21 @@ func (s *Speedtest) NewUserConfig(uc *UserConfig) {
 	}
 
 	s.doer.Transport = s
+
+	// Create a separate HTTP Transport for initial setup (dual-stack, no IPv4/IPv6 restrictions)
+	// This allows fetching server lists and user info even when using -6 flag with IPv6-only servers
+	setupTransport := &http.Transport{
+		Proxy:                 proxy,
+		DialContext:           s.tcpDialer.DialContext, // No network type override
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+
+	// setupClient uses the dual-stack transport
+	s.setupClient = &http.Client{Transport: setupTransport}
 }
 
 func (s *Speedtest) RoundTrip(req *http.Request) (*http.Response, error) {

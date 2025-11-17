@@ -42,6 +42,8 @@ var (
 	pingMode      = kingpin.Flag("ping-mode", "Select a method for Ping (support icmp/tcp/http).").Default("http").String()
 	unit          = kingpin.Flag("unit", "Set human-readable and auto-scaled rate units for output (options: decimal-bits/decimal-bytes/binary-bits/binary-bytes).").Short('u').String()
 	debug         = kingpin.Flag("debug", "Enable debug mode.").Short('d').Bool()
+	ipv4Only      = kingpin.Flag("ipv4", "Use IPv4 only.").Short('4').Bool()
+	ipv6Only      = kingpin.Flag("ipv6", "Use IPv6 only.").Short('6').Bool()
 )
 
 var (
@@ -64,6 +66,12 @@ func main() {
 		*unixOutput = true
 	}
 
+	// validate IPv4/IPv6 flags
+	if *ipv4Only && *ipv6Only {
+		fmt.Fprintln(os.Stderr, "Error: cannot use both -4 and -6 flags at the same time")
+		os.Exit(1)
+	}
+
 	// 0. speed test setting
 	var speedtestClient = speedtest.New(speedtest.WithUserConfig(
 		&speedtest.UserConfig{
@@ -78,6 +86,8 @@ func main() {
 			CityFlag:       *city,
 			LocationFlag:   *location,
 			Keyword:        *search,
+			IPv4Only:       *ipv4Only,
+			IPv6Only:       *ipv6Only,
 		}))
 
 	if *showCityList {
@@ -148,8 +158,19 @@ func main() {
 		})
 
 		// 3.0 create a packet loss analyzer, use default options
+		tcpNet := "tcp"
+		udpNet := "udp"
+		if *ipv4Only {
+			tcpNet = "tcp4"
+			udpNet = "udp4"
+		} else if *ipv6Only {
+			tcpNet = "tcp6"
+			udpNet = "udp6"
+		}
 		analyzer := speedtest.NewPacketLossAnalyzer(&speedtest.PacketLossAnalyzerOptions{
 			SourceInterface: *source,
+			TCPNetwork:      tcpNet,
+			UDPNetwork:      udpNet,
 		})
 
 		blocker := sync.WaitGroup{}

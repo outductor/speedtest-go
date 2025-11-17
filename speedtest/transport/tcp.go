@@ -38,7 +38,8 @@ type Client struct {
 	host    string
 	version string
 
-	dialer *net.Dialer
+	dialer      *net.Dialer
+	networkType string // "tcp", "tcp4", or "tcp6"
 
 	reader *bufio.Reader
 }
@@ -49,9 +50,15 @@ func NewClient(dialer *net.Dialer) (*Client, error) {
 		return nil, err
 	}
 	return &Client{
-		id:     uuid,
-		dialer: dialer,
+		id:          uuid,
+		dialer:      dialer,
+		networkType: "tcp", // default
 	}, nil
+}
+
+// SetNetworkType sets the network type to use for TCP connections
+func (client *Client) SetNetworkType(networkType string) {
+	client.networkType = networkType
 }
 
 func (client *Client) ID() string {
@@ -60,7 +67,7 @@ func (client *Client) ID() string {
 
 func (client *Client) Connect(ctx context.Context, host string) (err error) {
 	client.host = host
-	client.conn, err = client.dialer.DialContext(ctx, "tcp", client.host)
+	client.conn, err = client.dialer.DialContext(ctx, client.networkType, client.host)
 	if err != nil {
 		return err
 	}

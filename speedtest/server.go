@@ -172,7 +172,8 @@ func (s *Speedtest) FetchServerByIDContext(ctx context.Context, serverID string)
 	if err != nil {
 		return nil, err
 	}
-	resp, err := s.doer.Do(req)
+	// Use setupClient for fetching server info (dual-stack, no IPv4/IPv6 restrictions)
+	resp, err := s.setupClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -230,7 +231,8 @@ func (s *Speedtest) FetchServerListContext(ctx context.Context) (Servers, error)
 		return Servers{}, err
 	}
 
-	resp, err := s.doer.Do(req)
+	// Use setupClient for fetching server list (dual-stack, no IPv4/IPv6 restrictions)
+	resp, err := s.setupClient.Do(req)
 	if err != nil {
 		return Servers{}, err
 	}
@@ -245,7 +247,8 @@ func (s *Speedtest) FetchServerListContext(ctx context.Context) (Servers, error)
 			return Servers{}, err
 		}
 
-		resp, err = s.doer.Do(req)
+		// Use setupClient for fetching alternative server list (dual-stack, no IPv4/IPv6 restrictions)
+		resp, err = s.setupClient.Do(req)
 		if err != nil {
 			return Servers{}, err
 		}

@@ -24,6 +24,7 @@ type PacketLossSender struct {
 	raw           []byte
 	host          string
 	dialer        *net.Dialer
+	networkType   string // "udp", "udp4", or "udp6"
 }
 
 func NewPacketLossSender(uuid string, dialer *net.Dialer) (*PacketLossSender, error) {
@@ -34,14 +35,20 @@ func NewPacketLossSender(uuid string, dialer *net.Dialer) (*PacketLossSender, er
 		nounce:        nounce,
 		withTimestamp: false, // we close it as default, we won't be able to use it right now.
 		dialer:        dialer,
+		networkType:   "udp", // default
 	}
 	p.raw = []byte(fmt.Sprintf("%s %d %s %s", loss, nounce, "#", uuid))
 	return p, nil
 }
 
+// SetNetworkType sets the network type to use for UDP connections
+func (ps *PacketLossSender) SetNetworkType(networkType string) {
+	ps.networkType = networkType
+}
+
 func (ps *PacketLossSender) Connect(ctx context.Context, host string) (err error) {
 	ps.host = host
-	ps.conn, err = ps.dialer.DialContext(ctx, "udp", ps.host)
+	ps.conn, err = ps.dialer.DialContext(ctx, ps.networkType, ps.host)
 	return err
 }
 

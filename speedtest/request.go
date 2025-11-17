@@ -268,6 +268,12 @@ func (s *Server) TCPPing(
 	if err != nil {
 		return nil, err
 	}
+	// Set the network type based on IPv4/IPv6 preference
+	tcpNetwork := s.Context.config.tcpNetwork
+	if tcpNetwork == "" {
+		tcpNetwork = "tcp" // default fallback
+	}
+	client.SetNetworkType(tcpNetwork)
 	err = client.Connect(ctx, pingDst)
 	if err != nil {
 		return nil, err
@@ -365,7 +371,11 @@ func (s *Server) ICMPPing(
 		return nil, err
 	}
 	dbg.Printf("Echo: %s\n", strings.Split(u.Host, ":")[0])
-	dialContext, err := s.Context.ipDialer.DialContext(ctx, "ip:icmp", strings.Split(u.Host, ":")[0])
+	icmpNetwork := s.Context.config.icmpNetwork
+	if icmpNetwork == "" {
+		icmpNetwork = "ip:icmp" // default fallback
+	}
+	dialContext, err := s.Context.ipDialer.DialContext(ctx, icmpNetwork, strings.Split(u.Host, ":")[0])
 	if err != nil {
 		return nil, err
 	}
