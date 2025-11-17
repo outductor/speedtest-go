@@ -129,7 +129,13 @@ func main() {
 		} else {
 			servers, err = speedtestClient.FetchServers()
 			task.CheckError(err)
-			task.Printf("Found %d Public Servers", len(servers))
+			ipVersionLabel := ""
+			if *ipv4Only {
+				ipVersionLabel = " (IPv4)"
+			} else if *ipv6Only {
+				ipVersionLabel = " (IPv6)"
+			}
+			task.Printf("Found %d Public Servers%s", len(servers), ipVersionLabel)
 			if *showList {
 				task.Complete()
 				task.manager.Reset()
