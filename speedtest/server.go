@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net"
 	"net/http"
 	"net/url"
 	"sort"
@@ -332,6 +333,25 @@ func (s *Speedtest) FetchServerListContext(ctx context.Context) (Servers, error)
 	// Sort by distance
 	sort.Sort(ByDistance{servers})
 
+	// Filter servers by IPv4/IPv6 support if flags are set
+	if s.config.IPv6Only {
+		dbg.Printf("Filtering servers: IPv6 only\n")
+		servers = servers.FilterIPv6()
+		if len(servers) == 0 {
+			dbg.Printf("Warning: No IPv6-capable servers found\n")
+		} else {
+			dbg.Printf("Found %d IPv6-capable servers\n", len(servers))
+		}
+	} else if s.config.IPv4Only {
+		dbg.Printf("Filtering servers: IPv4 only\n")
+		servers = servers.FilterIPv4()
+		if len(servers) == 0 {
+			dbg.Printf("Warning: No IPv4-capable servers found\n")
+		} else {
+			dbg.Printf("Found %d IPv4-capable servers\n", len(servers))
+		}
+	}
+
 	if len(servers) <= 0 {
 		return servers, ErrServerNotFound
 	}
@@ -354,6 +374,80 @@ func distance(lat1 float64, lon1 float64, lat2 float64, lon2 float64) float64 {
 	sinePhiHalf2 := math.Sin(deltaPhiHalf)*math.Sin(deltaPhiHalf) + math.Cos(phi1)*math.Cos(phi2)*math.Sin(deltaLambdaHalf)*math.Sin(deltaLambdaHalf) // phi half-angle sine ^ 2
 	delta := 2 * math.Atan2(math.Sqrt(sinePhiHalf2), math.Sqrt(1-sinePhiHalf2))                                                                       // 2 arc sine
 	return radius * delta                                                                                                                             // r * delta
+}
+
+// extractHost extracts the hostname from a server host field
+// e.g., "speedtest.example.com.prod.hosts.ooklaserver.net:8080" -> "speedtest.example.com"
+func extractHost(hostWithPort string) string {
+	// Remove port if present
+	host := strings.Split(hostWithPort, ":")[0]
+
+	// Check if it's an ooklaserver.net host
+	if strings.HasSuffix(host, ".prod.hosts.ooklaserver.net") {
+		// Extract the original hostname (everything before .prod.hosts.ooklaserver.net)
+		parts := strings.Split(host, ".")
+		for i := len(parts) - 1; i >= 0; i-- {
+			if i >= 4 && parts[i-3] == "prod" && parts[i-2] == "hosts" && parts[i-1] == "ooklaserver" && parts[i] == "net" {
+				return strings.Join(parts[:i-3], ".")
+			}
+		}
+	}
+
+	return host
+}
+
+// FilterIPv6 returns servers that support IPv6.
+// It performs DNS lookups (AAAA records) to determine IPv6 support.
+// Servers that fail DNS lookup are excluded from the result.
+func (servers Servers) FilterIPv6() Servers {
+	var ipv6Servers Servers
+	for _, server := range servers {
+		host := extractHost(server.Host)
+		addrs, err := net.LookupIP(host)
+		if err != nil {
+			continue
+		}
+
+		hasIPv6 := false
+		for _, addr := range addrs {
+			if addr.To4() == nil { // IPv6 address
+				hasIPv6 = true
+				break
+			}
+		}
+
+		if hasIPv6 {
+			ipv6Servers = append(ipv6Servers, server)
+		}
+	}
+	return ipv6Servers
+}
+
+// FilterIPv4 returns servers that support IPv4.
+// It performs DNS lookups (A records) to determine IPv4 support.
+// Servers that fail DNS lookup are excluded from the result.
+func (servers Servers) FilterIPv4() Servers {
+	var ipv4Servers Servers
+	for _, server := range servers {
+		host := extractHost(server.Host)
+		addrs, err := net.LookupIP(host)
+		if err != nil {
+			continue
+		}
+
+		hasIPv4 := false
+		for _, addr := range addrs {
+			if addr.To4() != nil { // IPv4 address
+				hasIPv4 = true
+				break
+			}
+		}
+
+		if hasIPv4 {
+			ipv4Servers = append(ipv4Servers, server)
+		}
+	}
+	return ipv4Servers
 }
 
 // FindServer finds server by serverID in given server list.

@@ -138,8 +138,10 @@ Flags:
       --no-download            Disable download test.
       --no-upload              Disable upload test.
       --ping-mode              Select a method for Ping (support icmp/tcp/http).
-  -u  --unit                   Set human-readable and auto-scaled rate units for output 
+  -u  --unit                   Set human-readable and auto-scaled rate units for output
                                (options: decimal-bits/decimal-bytes/binary-bits/binary-bytes).
+  -4, --ipv4                   Use IPv4 only.
+  -6, --ipv6                   Use IPv6 only.
   -d  --debug                  Enable debug mode.
       --version                Show application version.
 ```
@@ -205,6 +207,32 @@ $ speedtest --server 6691 --server 6087
 ✓ Packet Loss: 0.00% (Sent: 343/Dup: 0/Max: 342)
 ```
 
+#### Test with IPv4 or IPv6
+
+You can force the speedtest to use IPv4 or IPv6 connections only. This is useful because:
+- IPv4 and IPv6 use different routing paths and may have different performance
+- Some servers only support one protocol
+- You can diagnose protocol-specific issues
+
+```bash
+# Test using IPv4 only
+$ speedtest -4
+
+# Test using IPv6 only
+$ speedtest -6
+
+# Test with a specific IPv6-capable server
+$ speedtest -6 --server <server-id>
+
+# Use custom IPv6 server URL (using IPv6 address literal)
+$ speedtest -6 --custom-url="http://[2001:db8::1]:8080/speedtest/upload.php"
+```
+
+**Note:**
+- When using `-6` or `-4` flags, the server list is automatically filtered to show only servers that support the specified protocol.
+- If a server doesn't support the specified protocol, the connection will fail.
+- Initial configuration (server list and user info) is fetched using dual-stack connections, even when using `-4` or `-6` flags.
+
 #### Test with a virtual location
 
 With `--city` or `--location` option, the closest servers of the location will be picked.
@@ -257,10 +285,14 @@ func main() {
 	
 	// Use a proxy for the speedtest. eg: socks://127.0.0.1:7890
 	// speedtest.WithUserConfig(&speedtest.UserConfig{Proxy: "socks://127.0.0.1:7890"})(speedtestClient)
-	
+
 	// Select a network card as the data interface.
 	// speedtest.WithUserConfig(&speedtest.UserConfig{Source: "192.168.1.101"})(speedtestClient)
-	
+
+	// Force IPv4 or IPv6
+	// speedtest.WithUserConfig(&speedtest.UserConfig{IPv4Only: true})(speedtestClient)
+	// speedtest.WithUserConfig(&speedtest.UserConfig{IPv6Only: true})(speedtestClient)
+
 	// Get user's network information
 	// user, _ := speedtestClient.FetchUserInfo()
 	
@@ -274,6 +306,11 @@ func main() {
 	// server, err := speedtest.FetchServerByID("28910")
 	
 	serverList, _ := speedtestClient.FetchServers()
+
+	// Filter servers by IPv6 or IPv4 support (optional, manual filtering)
+	// ipv6Servers := serverList.FilterIPv6()
+	// ipv4Servers := serverList.FilterIPv4()
+
 	targets, _ := serverList.FindServer([]int{})
 
 	for _, s := range targets {
