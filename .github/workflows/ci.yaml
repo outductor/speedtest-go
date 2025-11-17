@@ -2,50 +2,53 @@ name: go-ci
 
 on: [push]
 
-jobs:
-  setup:
-    runs-on: ubuntu-latest
-    steps:
-      - name: set up
-        uses: actions/setup-go@v3
-        with:
-          go-version: ^1.19
-        id: go
-      - name: check out
-        uses: actions/checkout@v3
-      - name: Cache
-        uses: actions/cache@v4
-        with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
+permissions:
+  contents: read
 
+jobs:
   build:
-    needs: setup
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - name: build
+      - name: Check out code
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Build
         run: go build ./...
 
   test:
-    needs: setup
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - name: test
+      - name: Check out code
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Test
         run: go test ./speedtest -v
 
   lint:
-    needs: setup
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/setup-go@v3
+      - name: Check out code
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
         with:
-          go-version: 1.19
-      - uses: actions/checkout@v3
+          go-version-file: 'go.mod'
+          cache: true
+
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v3
+        uses: golangci/golangci-lint-action@v6
         with:
-          version: v1.53.2
+          version: latest
