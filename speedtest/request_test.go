@@ -2,7 +2,6 @@ package speedtest
 
 import (
 	"context"
-	"fmt"
 	"runtime"
 	"testing"
 	"time"
@@ -18,7 +17,7 @@ func TestDownloadTestContext(t *testing.T) {
 		Context: defaultClient,
 	}
 
-	server.Context.Manager.Reset()
+	server.Context.Reset()
 	server.Context.SetRateCaptureFrequency(time.Millisecond)
 	server.Context.SetCaptureTime(time.Second)
 
@@ -29,7 +28,7 @@ func TestDownloadTestContext(t *testing.T) {
 	if err != nil {
 		t.Errorf("%v", err)
 	}
-	value := server.Context.Manager.GetAvgDownloadRate()
+	value := server.Context.GetAvgDownloadRate()
 	if value < idealSpeed*(1-delta) || idealSpeed*(1+delta) < value {
 		t.Errorf("got unexpected server.DLSpeed '%v', expected between %v and %v", value, idealSpeed*(1-delta), idealSpeed*(1+delta))
 	}
@@ -49,7 +48,7 @@ func TestUploadTestContext(t *testing.T) {
 		Context: defaultClient,
 	}
 
-	server.Context.Manager.Reset()
+	server.Context.Reset()
 	server.Context.SetRateCaptureFrequency(time.Millisecond)
 	server.Context.SetCaptureTime(time.Second)
 
@@ -60,7 +59,7 @@ func TestUploadTestContext(t *testing.T) {
 	if err != nil {
 		t.Errorf("%v", err)
 	}
-	value := server.Context.Manager.GetAvgUploadRate()
+	value := server.Context.GetAvgUploadRate()
 	if value < idealSpeed*(1-delta) || idealSpeed*(1+delta) < value {
 		t.Errorf("got unexpected server.ULSpeed '%v', expected between %v and %v", value, idealSpeed*(1-delta), idealSpeed*(1+delta))
 	}
@@ -70,8 +69,8 @@ func TestUploadTestContext(t *testing.T) {
 }
 
 func mockRequest(ctx context.Context, s *Server, w int) error {
-	fmt.Sprintln(w)
-	dc := s.Context.Manager.NewChunk()
+	_ = w // variable used in mock
+	dc := s.Context.NewChunk()
 	// (0.1MegaByte * 8bit * nConn * 10loop) / 0.1s = n*80Megabit
 	// sleep has bad deviation on windows
 	// ref https://github.com/golang/go/issues/44343
